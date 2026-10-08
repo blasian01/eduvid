@@ -2,6 +2,7 @@ node_modules/
 web/dist/
 server/.venv/
 server/jobs/
+server/tests/.work/
 __pycache__/
 *.pyc
 .DS_Store

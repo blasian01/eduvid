@@ -14,7 +14,9 @@ import httpx
 
 from app import deepseek, elevenlabs, pipeline, render
 
-WORK = Path("/Users/bronsonwoods/Documents/Codex/2026-10-07/ther/work")
+# Scratch space for per-test temp dirs, inside the repo and git-ignored.
+WORK = Path(__file__).resolve().parent / ".work"
+WORK.mkdir(exist_ok=True)
 
 
 class PipelineQA(unittest.IsolatedAsyncioTestCase):
@@ -133,14 +135,39 @@ class PipelineQA(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_job_exposes_error_and_marks_active_step(self):
         async def fail(job, keys):
-            job.step("voice", "active")
+            job.step("voice", "active", "Recorded 2/5 lines")
             raise elevenlabs.ElevenLabsError("Quota exhausted")
         with patch.object(pipeline, "run_full", fail):
             job = self.manager.create("How transformers power LLMs", {}, {})
             await job.task
         self.assertEqual(job.data["status"], "error")
         self.assertEqual(job.data["error"], "Quota exhausted")
-        self.assertEqual(next(step for step in job.data["steps"] if step["key"] == "voice")["status"], "error")
+        voice = next(step for step in job.data["steps"] if step["key"] == "voice")
+        self.assertEqual(voice["status"], "error")
+        self.assertEqual(voice["detail"], "Failed — see the error below", "in-progress text must not linger")
+
+    async def test_cancelled_and_interrupted_steps_do_not_keep_in_progress_text(self):
+        started = asyncio.Event()
+        async def hang(job, keys):
+            job.step("script", "active", "Asking deepseek-flash for a 60s script…")
+            started.set()
+            await asyncio.Event().wait()
+        with patch.object(pipeline, "run_full", hang):
+            job = self.manager.create("How transformers power LLMs", {}, {})
+            await started.wait()
+            self.manager.cancel(job)
+            await asyncio.gather(job.task, return_exceptions=True)
+        self.assertEqual(next(s for s in job.data["steps"] if s["key"] == "script")["detail"], "Cancelled")
+
+        # A job left "running" on disk is shown as interrupted after a restart.
+        data = json.loads((job.dir / "job.json").read_text())
+        data["status"] = "running"
+        next(s for s in data["steps"] if s["key"] == "script").update(status="active", detail="Asking…")
+        (job.dir / "job.json").write_text(json.dumps(data))
+        reloaded = pipeline.JobManager().get(job.id)
+        script = next(s for s in reloaded.data["steps"] if s["key"] == "script")
+        self.assertEqual((reloaded.data["status"], script["status"], script["detail"]),
+                         ("error", "error", "Interrupted by a server restart"))
 
     async def test_invalid_settings_rejected_before_scheduling(self):
         for settings in ({"seconds": "banana"}, {"aspect": {}}, {"quality": "4K"}, {"style": "missing"},
@@ -771,6 +798,10 @@ class PipelineQA(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual((await client.post("/api/jobs", json=body)).status_code, 422)
                 self.assertEqual((await client.post("/api/check-deepseek", json={"deepseek_key": "   "})).status_code, 400)
                 self.assertEqual((await client.post("/api/voices", json={"elevenlabs_key": "   "})).status_code, 400)
+                for path in ("/api/does-not-exist", "/api/jobs/..%2f..%2fREADME.md"):
+                    response = await client.get(path)
+                    self.assertEqual(response.status_code, 404, path)
+                    self.assertTrue(response.headers["content-type"].startswith("application/json"), path)
 
     async def test_resume_api_returns_job_and_rejects_missing_needed_keys(self):
         main = importlib.import_module("app.main")

@@ -232,9 +232,7 @@ class JobManager:
             if data.get("status") in ("queued", "running"):
                 data["status"] = "error"
                 data["error"] = "The server restarted while this job was running."
-                for s in data["steps"]:
-                    if s["status"] == "active":
-                        s["status"] = "error"
+                self._fail_active(job, "Interrupted by a server restart")
                 job.save()
             self.jobs[job.id] = job
 
@@ -423,7 +421,7 @@ class JobManager:
         if job.task and not job.task.done():
             # Persist the state even when cancellation happens before _guard's first turn.
             job.data.update(status="cancelled", error="Cancelled.")
-            self._fail_active(job)
+            self._fail_active(job, "Cancelled")
             job.log("Job cancelled.", "warn")
             job.task.cancel()
 
@@ -446,22 +444,24 @@ class JobManager:
             already_cancelled = job.data.get("status") == "cancelled"
             job.data["status"] = "cancelled"
             job.data["error"] = "Cancelled."
-            self._fail_active(job)
+            self._fail_active(job, "Cancelled")
             if not already_cancelled:
                 job.log("Job cancelled.", "warn")
         except Exception as e:  # noqa: BLE001 - every failure should reach the UI
             job.data["status"] = "error"
             job.data["error"] = str(e) or e.__class__.__name__
-            self._fail_active(job)
+            self._fail_active(job, "Failed — see the error below")
             job.log(f"Error: {job.data['error']}", "error")
         finally:
             job.save()
 
     @staticmethod
-    def _fail_active(job: Job) -> None:
+    def _fail_active(job: Job, detail: str) -> None:
+        # Replace in-progress text such as "Asking deepseek-flash…" so the step doesn't look still busy.
         for s in job.data["steps"]:
             if s["status"] == "active":
                 s["status"] = "error"
+                s["detail"] = detail
 
 
 # ---------------------------------------------------------------------------
@@ -800,7 +800,7 @@ async def stage_voice(job: Job, key: str | None, s: dict, *, reuse_existing: boo
                     return
             if not key:
                 raise RuntimeError("An ElevenLabs API key is needed to record the missing narration. "
-                                   "Add it in Settings, then resume this job.")
+                                   "Add it under API keys (top right), then resume this job.")
             audio, words = await elevenlabs.tts_with_timestamps(
                 key, s["voice_id"], beats[i]["narration"], model_id=s["tts_model"],
                 previous_text=beats[i - 1]["narration"] if i > 0 else None,

@@ -15,7 +15,9 @@ import httpx
 
 from app import deepseek, pipeline, remotion
 
-WORK = Path("/Users/bronsonwoods/Documents/Codex/2026-10-07/ther/work")
+# Scratch space for per-test temp dirs, inside the repo and git-ignored.
+WORK = Path(__file__).resolve().parent / ".work"
+WORK.mkdir(exist_ok=True)
 
 
 def storyboard(count=1):

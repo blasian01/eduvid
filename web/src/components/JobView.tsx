@@ -218,7 +218,9 @@ export default function JobView({ job, deepseekKey, elevenlabsKey, onUpdate, onC
           <button className="btn primary" onClick={resume} disabled={actionBusy || !deepseekKey.trim() || !elevenlabsKey.trim()} title="Continue generation using the saved script and existing voice clips">
             {actionBusy ? <span className="spinner" /> : <Icon name="refresh" />} Resume generation
           </button>
-          <span className="muted small">Reuses existing voice clips.</span>
+          <span className="muted small">
+            {!job.script ? "Starts again from the script." : job.script.beats.some((b) => b.audio_duration) ? "Reuses the saved script and recorded voice clips." : "Reuses the saved script."}
+          </span>
         </div>
       )}
 

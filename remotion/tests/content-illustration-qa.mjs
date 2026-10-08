@@ -10,7 +10,8 @@ import {validatePlan, contentKinds, exerciseNames} from '../validate-plan.mjs';
 import {contentFixtures, makeContentPlan} from './content-fixtures.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const out = process.env.EDUVID_CONTENT_QA_DIR ?? path.resolve(process.env.INIT_CWD ?? process.cwd(), 'work', 'remotion-content-qa');
+// Same git-ignored scratch area as the other QA scripts, wherever npm was started from.
+const out = process.env.EDUVID_CONTENT_QA_DIR ?? path.join(root, '.qa', 'content');
 await mkdir(out, {recursive:true});
 const fixtures = contentFixtures();
 // Remotion forwards browser console messages to stdout after onBrowserLog.

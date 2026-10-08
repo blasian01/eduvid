@@ -84,9 +84,9 @@ def list_jobs():
 @app.post("/api/jobs")
 async def create_job(body: CreateJob):
     if not (body.deepseek_key and body.deepseek_key.strip()):
-        raise HTTPException(400, "Missing DeepSeek API key — add it in Settings.")
+        raise HTTPException(400, "Missing DeepSeek API key — add it under API keys (top right).")
     if not (body.elevenlabs_key and body.elevenlabs_key.strip()):
-        raise HTTPException(400, "Missing ElevenLabs API key — add it in Settings.")
+        raise HTTPException(400, "Missing ElevenLabs API key — add it under API keys (top right).")
     # Keys stay in memory for this job only; they are never written to disk.
     keys = {"deepseek": body.deepseek_key.strip(), "elevenlabs": body.elevenlabs_key.strip()}
     source = None
@@ -166,6 +166,9 @@ if WEB_DIST.exists():
 
     @app.get("/{path:path}")
     def spa(path: str):
+        # Unknown API paths must stay JSON 404s, not the app's HTML with a 200.
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(404, "Not found")
         target = WEB_DIST / path
         if path and target.is_file() and WEB_DIST in target.resolve().parents:
             return FileResponse(target)

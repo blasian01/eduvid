@@ -516,8 +516,14 @@ export default function CreatePanel({ settings, onSettings, voices, styles, onGe
 }
 
 function SourceReview({ source, onClear }: { source: Source; onClear: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // The card renders below the input that produced it; bring each new source into view.
+  useEffect(() => {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    ref.current?.scrollIntoView?.({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+  }, [source.id]);
   return (
-    <div className="source-review" role="status" aria-label="Source review">
+    <div className="source-review" role="status" aria-label="Source review" ref={ref}>
       <div className="source-review-head">
         <div><span className="source-ready"><Icon name="check" size={14} /> Source ready</span><h2>{source.title}</h2></div>
         <button className="icon-btn" type="button" onClick={onClear} aria-label="Clear source" title="Clear source"><Icon name="x" /></button>

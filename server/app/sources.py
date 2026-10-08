@@ -219,6 +219,16 @@ async def _youtube_title(canonical_url: str, video_id: str) -> str:
     return f"YouTube video {video_id}"
 
 
+async def _youtube_video_missing(canonical_url: str) -> bool:
+    """True only when YouTube says the video doesn't exist (oEmbed 404); private or unknown is False."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get("https://www.youtube.com/oembed", params={"url": canonical_url, "format": "json"})
+        return response.status_code == 404
+    except httpx.HTTPError:
+        return False
+
+
 async def _command(*args: str, timeout: float = 180) -> str:
     proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     try:
@@ -282,6 +292,9 @@ async def extract_youtube(url: str, elevenlabs_key: str | None = None) -> dict:
         except asyncio.CancelledError:
             raise
         except Exception as e:
+            # Don't blame captions (or download audio) for a link to a video that isn't there.
+            if await _youtube_video_missing(canonical):
+                raise SourceError("This YouTube video doesn't exist or was removed. Check the link.") from e
             if not elevenlabs_key or not elevenlabs_key.strip():
                 raise SourceError("YouTube captions could not be retrieved. Add an ElevenLabs key with Speech to Text access for audio transcription, or upload a transcript.") from e
             try:

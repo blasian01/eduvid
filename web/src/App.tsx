@@ -284,7 +284,7 @@ function EmptyState() {
       <ol className="how">
         <li><b>Script</b> — hook, explanation, takeaway</li>
         <li><b>Voice</b> — one line per beat, timed to the word</li>
-        <li><b>Animate</b> — ManimGL code, test-run & auto-fixed</li>
+        <li><b>Animate</b> — Remotion scenes or ManimGL code, checked & auto-fixed</li>
         <li><b>Render</b> — MP4 with captions & subtitles file</li>
       </ol>
     </div>

@@ -136,7 +136,7 @@ def _explain(status: int, text: str) -> str:
         msg = text
     msg = msg[:300]
     if status == 401:
-        return "DeepSeek rejected the API key (401). Check the key in Settings."
+        return "DeepSeek rejected the API key (401). Check it under API keys (top right)."
     if status == 402:
         return "Your DeepSeek account has insufficient balance (402). Top up at platform.deepseek.com."
     if status == 400 and "model" in msg.lower():

@@ -17,7 +17,9 @@ from fastapi import FastAPI
 
 from app import sources
 
-WORK = Path("/Users/bronsonwoods/Documents/Codex/2026-10-07/ther/work")
+# Scratch space for per-test temp dirs, inside the repo and git-ignored.
+WORK = Path(__file__).resolve().parent / ".work"
+WORK.mkdir(exist_ok=True)
 VIDEO_ID = "dQw4w9WgXcQ"
 CANONICAL = f"https://www.youtube.com/watch?v={VIDEO_ID}"
 ARTICLE_TEXT = (
@@ -181,6 +183,9 @@ class SourceAPIQA(unittest.IsolatedAsyncioTestCase):
         self.directory = Path(self.tmp.name)
         self.directory_patch = patch.object(sources, "SOURCES_DIR", self.directory)
         self.directory_patch.start()
+        exists = patch.object(sources, "_youtube_video_missing", AsyncMock(return_value=False))
+        exists.start()
+        self.addCleanup(exists.stop)
         self.app = FastAPI()
         self.app.include_router(sources.router)
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app, raise_app_exceptions=False),
@@ -429,6 +434,21 @@ class SourceAPIQA(unittest.IsolatedAsyncioTestCase):
 
 
 class YouTubeExtractionQA(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        exists = patch.object(sources, "_youtube_video_missing", AsyncMock(return_value=False))
+        exists.start()
+        self.addCleanup(exists.stop)
+
+    async def test_missing_video_is_reported_without_caption_or_paid_fallback_advice(self):
+        for key in (None, "unused"):
+            with self.subTest(key=key), \
+                 patch.object(sources, "_youtube_video_missing", AsyncMock(return_value=True)), \
+                 patch.object(sources, "_fetch_captions", side_effect=sources.SourceError("No captions")), \
+                 patch.object(sources, "_transcribe_youtube", AsyncMock()) as transcription:
+                with self.assertRaisesRegex(sources.SourceError, "doesn't exist or was removed"):
+                    await sources.extract_youtube(CANONICAL, key)
+                transcription.assert_not_awaited()
+
     async def test_automatic_and_foreign_caption_warnings_are_preserved(self):
         with patch.object(sources, "_fetch_captions", return_value=(ARTICLE_TEXT, 75.0, True, "French")), \
              patch.object(sources, "_youtube_title", AsyncMock(return_value="Safety video")), \
@@ -505,3 +525,21 @@ class YouTubeExtractionQA(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class YouTubeExistenceQA(unittest.IsolatedAsyncioTestCase):
+    async def test_only_an_oembed_404_counts_as_missing(self):
+        original = httpx.AsyncClient
+        def client_for(handler):
+            return lambda **kwargs: original(**kwargs, transport=httpx.MockTransport(handler))
+        def offline(request):
+            raise httpx.ConnectError("offline", request=request)
+        cases = {
+            "not found": (lambda request: httpx.Response(404), True),
+            "public": (lambda request: httpx.Response(200, json={"title": "x"}), False),
+            "private or embed-disabled": (lambda request: httpx.Response(401), False),
+            "offline": (offline, False),
+        }
+        for name, (handler, missing) in cases.items():
+            with self.subTest(name), patch.object(httpx, "AsyncClient", side_effect=client_for(handler)):
+                self.assertIs(await sources._youtube_video_missing(CANONICAL), missing)
