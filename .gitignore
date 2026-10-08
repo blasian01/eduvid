@@ -1,0 +1,22 @@
+node_modules/
+web/dist/
+server/.venv/
+server/jobs/
+__pycache__/
+*.pyc
+.DS_Store
+remotion/.cache/
+remotion/.qa/
+
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+.claude/
+
+# Imported sources and reference documents
+server/sources/
+tapybl/

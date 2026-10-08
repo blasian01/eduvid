@@ -1,0 +1,12 @@
+{
+  "name": "eduvid",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Short source-based explainer videos with DeepSeek, ElevenLabs, Remotion and ManimGL",
+  "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm --prefix web run build",
+    "start": "npm run build && cd server && .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000"
+  }
+}
